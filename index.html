@@ -352,23 +352,44 @@ function setControls(){
 /* =====================================================================
    TALKING TO THE CLOUDFLARE WORKER
    ===================================================================== */
+/* Your Worker expects ONE text field called "prompt", so the instructions and the
+   conversation so far are combined into a single prompt for every request. */
+function buildPrompt(system, msgs){
+  const convo = msgs.map(m =>
+    m.role === "assistant" ? `YOUR PREVIOUS REPLY:\n${m.content}` : `INPUT:\n${m.content}`
+  ).join("\n\n");
+  return `${system}\n\n==================== CONVERSATION SO FAR ====================\n${convo}\n\n==================== YOUR TASK ====================\nWrite your next reply now, following the instructions above. Reply with the JSON only.`;
+}
+function extractText(data){
+  if(typeof data === "string") return data;
+  if(!data || typeof data !== "object") return null;
+  if(Array.isArray(data.content)) return data.content.filter(b=>b.type==="text").map(b=>b.text).join("");
+  for(const k of ["text","reply","response","result","output","completion","answer","message","content"]){
+    const v = data[k];
+    if(typeof v === "string") return v;
+    if(v && typeof v === "object"){ const t = extractText(v); if(t) return t; }
+  }
+  if(Array.isArray(data.choices) && data.choices[0]) return extractText(data.choices[0].message || data.choices[0]);
+  return null;
+}
 async function callClaude(system, msgs, maxTokens){
   if(!WORKER_URL || WORKER_URL.includes("PASTE_YOUR")) throw new Error("WORKER_URL has not been set in index.html (see setup guide, Part 2).");
   const res = await fetch(WORKER_URL, {
     method:"POST",
     headers:{ "Content-Type":"application/json", "X-Access-Code": accessCode },
-    body: JSON.stringify({ accessCode, tier: MODEL_TIER, system, messages: msgs, max_tokens: maxTokens || 1200 })
+    body: JSON.stringify({ prompt: buildPrompt(system, msgs), accessCode, tier: MODEL_TIER, max_tokens: maxTokens || 1200 })
   });
-  let data, raw = await res.text();
-  try { data = JSON.parse(raw); } catch { data = { error: raw }; }
-  if(!res.ok || data.error){
-    const m = typeof data.error === "string" ? data.error : (data.error?.message || JSON.stringify(data.error || data));
+  const raw = await res.text();
+  let data;
+  try { data = JSON.parse(raw); } catch { data = res.ok ? raw : { error: raw }; }
+  if(!res.ok || (data && typeof data === "object" && data.error)){
+    const e = data && data.error;
+    const m = typeof e === "string" ? e : (e?.message || JSON.stringify(e || data));
     throw new Error(`Worker said (${res.status}): ${m}`);
   }
-  // Accept either the raw Anthropic response or a simplified {text:"..."} shape.
-  if(typeof data.text === "string") return data.text;
-  if(typeof data.reply === "string") return data.reply;
-  if(Array.isArray(data.content)) return data.content.filter(b=>b.type==="text").map(b=>b.text).join("");
+  if(data && typeof data === "object" && (data.turns || data.scores)) return raw; // Worker passed Claude's JSON straight through
+  const text = extractText(data);
+  if(text) return text;
   throw new Error("Unexpected reply from Worker: " + raw.slice(0,200));
 }
 function parseJSON(text){
