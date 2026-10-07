@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peer Case Rounds</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,650&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   PEER CASE ROUNDS — audio peer-discussion simulator
+   Only ONE thing must be edited before use: WORKER_URL in the <script>.
+   ===================================================================== */
+:root{
+  --bg:#f4f1ea; --panel:#fffdf8; --ink:#1f2a2e; --muted:#5d6a6e; --line:#ddd6c8;
+  --accent:#0f6b63; --accent-ink:#ffffff; --warn:#a33a2b; --soft:#e9f2ef;
+  --priya:#7a4fa3; --marcus:#b5642a; --devon:#2a6fb5; --you:#0f6b63;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 6px 20px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151a1c; --panel:#1d2427; --ink:#e8ecea; --muted:#9aa7a8; --line:#33403f;
+    --accent:#3fb4a6; --accent-ink:#0d1a19; --warn:#ef8a78; --soft:#21312f;
+    --priya:#b893e0; --marcus:#e5a06b; --devon:#7db3ee; --you:#3fb4a6;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151a1c; --panel:#1d2427; --ink:#e8ecea; --muted:#9aa7a8; --line:#33403f;
+  --accent:#3fb4a6; --accent-ink:#0d1a19; --warn:#ef8a78; --soft:#21312f;
+  --priya:#b893e0; --marcus:#e5a06b; --devon:#7db3ee; --you:#3fb4a6; --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Inter,system-ui,sans-serif}
+h1,h2,h3{font-family:"Source Serif 4",Georgia,serif;font-weight:650;margin:0}
+button{font:inherit;cursor:pointer}
+.wrap{max-width:1080px;margin:0 auto;padding:20px 16px 40px}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+header.top h1{font-size:26px}
+header.top .sub{color:var(--muted);font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.hidden{display:none !important}
+
+/* ---------- start screen ---------- */
+#startScreen{padding:28px;max-width:620px;margin:20px auto}
+#startScreen p{color:var(--muted);margin:8px 0 18px}
+label.f{display:block;font-weight:600;font-size:13px;margin:14px 0 6px}
+input[type=text],input[type=password]{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
+.btn{border:0;border-radius:10px;padding:11px 18px;font-weight:600}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn.danger{background:transparent;border:1px solid var(--warn);color:var(--warn)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.notice{font-size:13px;padding:10px 12px;border-radius:10px;background:var(--soft);margin-top:14px}
+.err{color:var(--warn);font-size:13px;margin-top:10px;min-height:1em}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+/* ---------- discussion screen ---------- */
+#roomScreen{display:grid;grid-template-columns:270px 1fr;gap:16px}
+@media (max-width:820px){#roomScreen{grid-template-columns:1fr}}
+.side{padding:16px;display:flex;flex-direction:column;gap:14px;align-self:start}
+.seat{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;border:1px solid transparent;transition:.2s}
+.seat .av{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;flex:none}
+.seat .nm{font-weight:600}
+.seat .ds{font-size:12px;color:var(--muted)}
+.seat.speaking{border-color:var(--line);background:var(--soft)}
+.seat.speaking .av{box-shadow:0 0 0 3px var(--panel),0 0 0 6px currentColor;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 3px var(--panel),0 0 0 9px currentColor}}
+.sectionlabel{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:4px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.chip.done{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.toggles label{display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0}
+.main{display:flex;flex-direction:column;min-height:72vh}
+#transcript{flex:1;overflow-y:auto;padding:18px;max-height:62vh;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:88%}
+.msg .who{font-size:12px;font-weight:600;margin-bottom:2px}
+.msg .bubble{padding:10px 13px;border-radius:12px;background:var(--bg);border:1px solid var(--line)}
+.msg.you{align-self:flex-end}
+.msg.you .bubble{background:var(--soft)}
+.msg.sys .bubble{background:transparent;border-style:dashed;color:var(--muted);font-size:13px}
+.thinking{color:var(--muted);font-size:13px;font-style:italic}
+.controls{border-top:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:10px}
+#micBtn{width:64px;height:64px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+#micBtn.listening{background:var(--warn);animation:pulse2 1s infinite}
+@keyframes pulse2{50%{transform:scale(1.06)}}
+#micBtn svg{width:28px;height:28px}
+#textIn{flex:1;min-width:160px}
+#status{font-size:13px;color:var(--muted);min-height:1.3em}
+#interim{font-style:italic;color:var(--muted);font-size:13px}
+
+/* ---------- chart drawer & debrief ---------- */
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);max-width:760px;width:calc(100% - 32px);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlghead{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+.dlgbody{padding:16px 20px;max-height:70vh;overflow-y:auto;white-space:pre-wrap;font-size:14px}
+#debrief{padding:24px}
+#debrief h2{margin-bottom:6px}
+.scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:16px 0}
+.score{border:1px solid var(--line);border-radius:12px;padding:12px}
+.score .n{font-family:"Source Serif 4",serif;font-size:28px;font-weight:650}
+.score .l{font-size:12px;color:var(--muted)}
+#debrief h3{margin:18px 0 6px;font-size:18px}
+#debrief ul{margin:0;padding-left:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Peer Case Rounds</h1>
+      <div class="sub">Audio case discussion · 5-month-old with prolonged fever and rash · Fictional patient for training</div>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="chartBtn">View patient chart</button>
+    </div>
+  </header>
+
+  <!-- ================= START SCREEN ================= -->
+  <section id="startScreen" class="card">
+    <h2>Join the study group</h2>
+    <p>You're one of four fourth-year students reviewing the same infant. Priya, Marcus and Devon are simulated classmates; you are the fourth. Talk to them using your microphone (or type). Say <b>"stop"</b> at any time to end the discussion and get feedback.</p>
+
+    <label class="f" for="nameIn">Your first name (the group will call you this)</label>
+    <input type="text" id="nameIn" placeholder="e.g. Sam" maxlength="30" autocomplete="given-name">
+
+    <label class="f" for="codeIn">Access code</label>
+    <input type="password" id="codeIn" placeholder="The passphrase set in your Cloudflare Worker">
+
+    <div class="row" style="margin-top:20px">
+      <button class="btn primary" id="startBtn">Start discussion</button>
+      <button class="btn ghost" id="testVoiceBtn">Test speakers</button>
+    </div>
+    <div class="err" id="startErr"></div>
+    <div class="notice" id="browserNote">Best in <b>Google Chrome</b> or <b>Microsoft Edge</b> on a computer. Allow microphone access when your browser asks.</div>
+  </section>
+
+  <!-- ================= DISCUSSION SCREEN ================= -->
+  <section id="roomScreen" class="hidden">
+    <aside class="side card">
+      <div>
+        <div class="sectionlabel" style="margin-bottom:6px">Study group</div>
+        <div id="seats"></div>
+      </div>
+      <div>
+        <div class="sectionlabel" style="margin-bottom:6px">Topics covered</div>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="toggles">
+        <div class="sectionlabel" style="margin-bottom:4px">Settings</div>
+        <label><input type="checkbox" id="optVoice" checked> Read classmates aloud</label>
+        <label><input type="checkbox" id="optHands" checked> Hands-free (mic opens after they speak)</label>
+        <label><input type="checkbox" id="optAutoSend" checked> Send automatically when I stop talking</label>
+        <label style="margin-top:6px">Speech speed
+          <input type="range" id="optRate" min="0.8" max="1.3" step="0.05" value="1.05" style="flex:1">
+        </label>
+      </div>
+      <button class="btn danger" id="stopBtn">Stop &amp; get feedback</button>
+    </aside>
+
+    <div class="main card">
+      <div id="transcript" aria-live="polite"></div>
+      <div class="controls">
+        <div class="row">
+          <button id="micBtn" title="Click to talk" aria-label="Talk">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          </button>
+          <input type="text" id="textIn" placeholder="Speak, or type here and press Enter">
+          <button class="btn primary" id="sendBtn">Send</button>
+        </div>
+        <div id="interim"></div>
+        <div id="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DEBRIEF ================= -->
+  <section id="debriefScreen" class="hidden card">
+    <div id="debrief"></div>
+  </section>
+</div>
+
+<dialog id="chartDlg">
+  <div class="dlghead"><h3>Patient chart</h3><button class="btn ghost" id="closeChart">Close</button></div>
+  <div class="dlgbody" id="chartBody"></div>
+</dialog>
+
+<script>
+/* =====================================================================
+   1) EDIT THIS LINE: paste your Cloudflare Worker address between the quotes.
+      It looks like: https://infant-case-rounds.YOURNAME.workers.dev
+   ===================================================================== */
+const WORKER_URL = "https://stud-chatb1.techjjy.workers.dev";
+
+/* Which model tier the Worker should use: "fast", "balanced" or "thorough".
+   "balanced" uses your MODEL_BALANCED variable (claude-sonnet-5-5). */
+const MODEL_TIER = "balanced";
+
+/* =====================================================================
+   PATIENT CASE (shown in "View patient chart" and given to the classmates)
+   The diagnosis is deliberately NOT written here.
+   ===================================================================== */
+const CASE_TEXT = `PATIENT: Baby Girl A. Reyes-Whitfield — 5-month-old female, mixed-race (maternal Filipino, paternal Irish-American). Informant: biological mother, reliable.
+
+CHIEF COMPLAINT: High fever for more than 4 days, feeding poorly, new rash over the body.
+
+HISTORY OF PRESENT ILLNESS: Well until ~5 days ago. Fever now persistently 102.5–104.1°F (39.2–40.1°C), continuous, not responding to alternating acetaminophen/ibuprofen. For 2 days: blotchy pink-red rash starting on trunk, spreading to arms, legs and diaper area; flat to slightly raised, no blisters; no new soaps, foods or medications. Eyes "pink and glassy" for 2 days, no discharge or crusting. Lips unusually red and slightly cracked. Very fussy, hard to console, high-pitched crying, fragmented sleep. Intake about half of normal for 2 days; 3–4 wet diapers in last 24 h. No cough, congestion, vomiting or diarrhea. Hands and feet "puffy and warm" today. Attends small in-home daycare twice weekly; no known sick contacts; no travel. Urgent care on fever day 3: rapid strep negative, urinalysis reported negative (no detail given); sent home with antipyretic advice.
+
+REVIEW OF SYSTEMS: Constitutional — fever, fussiness, decreased activity, poor feeding. Eyes — bilateral redness x2 days, no discharge. Mouth — red, slightly cracked lips; mother unsure about tongue. Skin — diffuse blotchy rash x2 days, no blistering or peeling yet. Cardiorespiratory — no cough, wheeze or breathing difficulty. GI — no vomiting/diarrhea, intake halved. GU — fewer wet diapers. Extremities — puffy, warm hands and feet. Neuro — no seizures, irritable, high-pitched cry. Lymph — mother has not checked neck.
+
+1. OB/GYN HISTORY: Not applicable (infant). Pregnancy: full term 39 weeks, uncomplicated vaginal delivery, no NICU.
+2. PREVENTIVE CARE: Well visits at 2 wk, 2 mo, 4 mo; growth 40th–55th percentile; newborn metabolic and hearing screens normal; no prior hospital or ED visits.
+3. IMMUNIZATIONS: Up to date through 4 months (HepB x2; DTaP, IPV, Hib, PCV13, RV x2). None in last 2 weeks.
+4. FAMILY HISTORY: Mother 29 healthy; father 32 healthy with seasonal allergies; maternal grandmother hypertension; paternal grandfather type 2 diabetes. No autoimmune/rheumatologic disease, no childhood vasculitis or unexplained prolonged fevers in relatives. No consanguinity.
+5. CURRENT MEDICAL HISTORY: Five days of high persistent fever poorly responsive to antipyretics; diffuse rash x2 days; bilateral non-purulent conjunctival injection; red cracked lips; puffy warm hands and feet; marked irritability; reduced intake and urine output. No prior similar episodes.
+6. ALLERGIES: NKDA; no food or environmental allergies.
+7. EXPOSURES: In-home daycare (3–4 children) 2 days/week; no sick contacts; no travel; no pets; no ticks, insect bites or standing water; smoke-free home; municipal water.
+8. BEHAVIOR: Normally smiley and engaged, sleeps 10–11 h. Now fussy, inconsolable at times, high-pitched crying, less eye contact and interest in toys.
+9. FAMILY SOCIAL HISTORY: Lives with both parents and healthy 3-year-old sibling; mother part-time, father full-time; no tobacco/alcohol/drugs; stable housing, food secure, insured, regular primary care.
+10. HABITS: Breast milk + formula, baseline ~24–28 oz/day, now about half; no solids yet; pacifier at sleep; no screen time.
+11. PAST MEDICAL HISTORY: Term, BW 7 lb 4 oz; no jaundice needing phototherapy; no hospitalizations, surgeries or chronic illness; development normal (rolls both ways, good head control, reaches, babbles).
+12. PREVIOUS IMPORTANT TESTS: 4-month visit normal. Urgent care day 3: rapid strep negative, UA "no infection" (details not provided). No prior bloodwork, imaging or echocardiogram.
+
+PHYSICAL EXAM TODAY: T 103.6°F (39.8°C) rectal, HR 168, RR 36, BP 88/54, SpO2 98% RA, weight 6.9 kg (~45th %ile).
+General: irritable, intermittently hard to console, mildly ill, not toxic-appearing.
+Eyes: bilateral bulbar conjunctival injection, non-exudative, limbal sparing.
+Mouth: lips red, dry, slightly cracked; oropharynx mildly red.
+Neck: one small mobile mildly tender right node ~1 cm; no significant cervical lymphadenopathy.
+Skin: diffuse blanching maculopapular rash on trunk, extremities and perineum; no vesicles, petechiae or purpura.
+Extremities: mild edema of dorsal hands and feet; warm; no periungual peeling; no joint swelling.
+CV: tachycardic, regular, no murmur on brief exam. Resp: clear. Abdomen: soft, no organomegaly.
+Neuro: alert, irritable but intermittently consolable; moves all limbs; fontanelle soft and flat.
+
+CLINICAL NOTE: No lab results beyond urgent care are available yet. CBC, ESR/CRP, BMP, urinalysis with microscopy and consideration of echocardiography would be reasonable next steps.`;
+
+/* =====================================================================
+   CLASSMATES
+   ===================================================================== */
+const PEERS = {
+  Priya:  {color:"var(--priya)",  desc:"Organized · uses criteria & frameworks", pitch:1.15, voiceHint:["female","samantha","zira","jenny","aria","google us english","victoria","karen"]},
+  Marcus: {color:"var(--marcus)", desc:"Devil's advocate · challenges anchoring", pitch:0.85, voiceHint:["male","daniel","david","guy","alex","google uk english male","fred","ryan"]},
+  Devon:  {color:"var(--devon)",  desc:"Practical · management & family focus",  pitch:1.0,  voiceHint:["male","mark","tom","google uk english male","rishi","aaron","christopher"]}
+};
+const TOPICS = [
+  ["differential","Differential diagnosis"],
+  ["cause","Cause / pathophysiology"],
+  ["symptoms","Symptoms & criteria"],
+  ["tests","Tests recommended"],
+  ["treatment","Treatment"],
+  ["prognosis","Prognosis"]
+];
+
+/* =====================================================================
+   INSTRUCTIONS FOR CLAUDE (the "director" of the three classmates)
+   ===================================================================== */
+function buildSystemPrompt(userName){
+return `You are directing a realistic, spoken small-group case discussion among four fourth-year medical students reviewing the SAME infant patient. You voice THREE of them: Priya, Marcus and Devon. The fourth student is a real person named ${userName}; you NEVER speak for ${userName}.
+
+THE CLASSMATES
+- Priya: organized and systematic. Likes to summarize, structure the discussion, and reference formal criteria (e.g., AHA guidance). Warm, keeps the group on track.
+- Marcus: friendly devil's advocate. Pushes the group to keep the differential open, asks "what else could this be?", challenges anchoring, but concedes gracefully when evidence is good.
+- Devon: practical and slightly less confident. Thinks about next steps, monitoring, the family's perspective and logistics. Occasionally makes a small, realistic mistake or is unsure; peers correct him kindly and with reasons.
+
+TOPICS THE GROUP SHOULD COVER (naturally, not as a checklist, roughly in this order): differential diagnosis; cause/pathophysiology; symptoms and how they map to diagnostic criteria; tests recommended (and why); potential treatment; prognosis and follow-up.
+
+STYLE RULES (this is spoken audio)
+- Sound like real students talking around a table: short, natural sentences, occasional "hmm", "good point", "wait—". No markdown, no bullet lists, no headings, no emojis. Spell out abbreviations the first time if helpful, but normal medical shorthand like CRP or IVIG is fine.
+- Each turn, 1 to 3 classmates speak. Each line is 1–4 sentences (max ~70 words). Keep it moving.
+- Be constructive and collegial. Disagree with reasons, build on each other's points, credit good ideas.
+- Respond to what ${userName} actually said. Engage with their specific point first. If they are correct, affirm and extend it. If they are partly wrong, a classmate gently corrects with the reasoning ("I think it's actually... because..."). Never just praise vaguely.
+- Regularly bring ${userName} in by name with a specific question ("${userName}, would you get an echo now or wait for labs?"). Most turns should END with a question or invitation to ${userName}, so they have something to respond to.
+- If ${userName} is quiet, vague, says "I don't know", or goes off-topic, a classmate helps (offers a hint or a narrower question) and steers back to the case.
+- Stay inside the case facts below. Do NOT invent new lab or imaging results for this patient; no labs are back yet. The group can discuss what results they would EXPECT and what thresholds would change management.
+- Do not reveal the "final answer" as a fact handed down. The group should reason toward it. Early on, keep a genuine differential. It is fine for the group to converge on the leading diagnosis once the reasoning has been discussed (ideally with ${userName}'s input).
+- Be medically accurate. Correct errors (including ${userName}'s) kindly. Never give unsafe teaching.
+
+FACILITATOR KNOWLEDGE (for accuracy; do not recite as a block):
+- Leading diagnosis: incomplete (atypical) Kawasaki disease in a 5-month-old. Fever ≥5 days with only 2–3 principal features. Features present: bilateral non-exudative limbal-sparing conjunctival injection, oral changes (red cracked lips), polymorphous rash incl. perineal accentuation, edema of hands/feet. Cervical lymphadenopathy NOT met (node ~1 cm; criterion requires ≥1.5 cm). Extreme irritability is a common supporting feature. Infants <6 months are more likely to present incompletely and have the HIGHEST risk of coronary artery aneurysms, so they need a low threshold for evaluation.
+- Differential: viral exanthems (adenovirus, enterovirus, EBV; measles is less likely but she is too young for MMR), group A strep/scarlet fever (rapid strep negative, rare <3 years), toxic shock syndrome, staphylococcal scalded skin syndrome, drug reaction/Stevens-Johnson (no new drugs), serious bacterial infection incl. UTI/sepsis/meningitis (young febrile infant), MIS-C (ask about SARS-CoV-2 exposure), systemic JIA, rickettsial disease (no tick exposure).
+- Cause: unknown; thought to be an immune-mediated medium-vessel vasculitis triggered in genetically susceptible children, possibly by an infectious agent; more common in children of Asian descent (relevant: maternal Filipino ancestry). Not contagious. Not caused by anything the parents did.
+- AHA incomplete-KD algorithm: fever ≥5 days + 2–3 criteria (or infant with ≥7 days unexplained fever) → CRP and ESR. If CRP ≥3.0 mg/dL and/or ESR ≥40 mm/h → supplemental labs: albumin ≤3.0 g/dL, anemia for age, elevated ALT, platelets ≥450,000 after day 7, WBC ≥15,000, urine ≥10 WBC/hpf (sterile pyuria). ≥3 supplemental criteria OR positive echocardiogram → treat. Echocardiogram (coronary Z-scores ≥2.5 abnormal) regardless; in young infants echo should not be delayed. Also: CBC with differential, BMP/LFTs, UA with microscopy and urine culture, blood culture, consider LP given age/irritability (and before steroids if considered), viral testing, possibly ECG.
+- Treatment: IVIG 2 g/kg as single infusion over 10–12 h, ideally within 10 days of fever onset (still give after day 10 if ongoing inflammation). Aspirin: moderate (30–50 mg/kg/day) or high dose (80–100 mg/kg/day) until afebrile ~48–72 h, then low dose 3–5 mg/kg/day until 6–8 week echo is normal. Reye syndrome risk: avoid influenza/varicella exposure; inactivated flu vaccine. Defer live vaccines (MMR, varicella) 11 months after IVIG. Higher-risk patients (infants <6 months fit some risk scores) may get adjunctive corticosteroids; IVIG-resistant disease (fever ≥36 h after IVIG) → second IVIG, steroids, or infliximab.
+- Prognosis: with timely IVIG, coronary aneurysm risk drops from ~25% to ~4%. Most children recover fully. Echo at diagnosis, 1–2 weeks and 4–6 weeks; long-term cardiology follow-up depends on coronary findings. Recurrence ~1–3%. Giant aneurysms carry risk of thrombosis, stenosis, MI.
+
+PATIENT CASE (all four students have this chart):
+${CASE_TEXT}
+
+OUTPUT FORMAT — reply with ONLY this JSON, nothing before or after:
+{"turns":[{"speaker":"Priya","text":"..."},{"speaker":"Marcus","text":"..."}],"topics_covered":["differential"]}
+- "speaker" must be exactly "Priya", "Marcus" or "Devon".
+- "topics_covered" lists ALL topics meaningfully discussed so far in the whole conversation, using only these keys: differential, cause, symptoms, tests, treatment, prognosis.`;
+}
+
+function buildDebriefPrompt(userName){
+return `You are an experienced pediatric attending reviewing a transcript of a case discussion among four fourth-year medical students about a 5-month-old with incomplete Kawasaki disease. Three students (Priya, Marcus, Devon) are simulated. Evaluate ONLY the real student, ${userName}, based solely on what ${userName} actually said. If ${userName} said very little, say so honestly and score accordingly — do not invent contributions.
+
+Score each 1–5:
+- preciseness: medical accuracy and specificity of ${userName}'s statements
+- explanation: how clearly ${userName} explained reasoning (why, not just what)
+- constructiveness: how ${userName} built on, questioned, or helped peers in a collegial way
+
+Reply with ONLY this JSON:
+{"overall":"2–3 sentence summary","scores":{"preciseness":0,"explanation":0,"constructiveness":0},"strengths":["..."],"improve":["specific, actionable suggestions"],"missed":["important case points the group or ${userName} did not cover"],"teaching_points":["3–5 key takeaways about this case"]}`;
+}
+
+/* =====================================================================
+   APP STATE
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+let userName = "", accessCode = "";
+let messages = [];          // conversation sent to Claude
+let transcriptLog = [];     // [{speaker,text}] for debrief + download
+let covered = new Set();
+let busy = false, ended = false, speaking = false;
+let recog = null, listening = false, heardText = "";
+const STOP_RE = /^\s*(please\s+)?(stop|stop now|stop please|stop the discussion|stop discussion|stop session|end session|end discussion|end the discussion|let'?s stop|we can stop|i want to stop)\s*[.!]*\s*$/i;
+
+/* ---------- small helpers ---------- */
+function setStatus(t){ $("status").textContent = t || ""; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function addMsg(speaker, text, kind){
+  const d = document.createElement("div");
+  d.className = "msg " + (kind||"");
+  const color = speaker===userName ? "var(--you)" : (PEERS[speaker]?.color || "var(--muted)");
+  d.innerHTML = (kind==="sys" ? "" : `<div class="who" style="color:${color}">${esc(speaker)}</div>`) +
+                `<div class="bubble">${esc(text)}</div>`;
+  $("transcript").appendChild(d);
+  $("transcript").scrollTop = $("transcript").scrollHeight;
+  return d;
+}
+function renderSeats(){
+  const all = [...Object.entries(PEERS), [userName,{color:"var(--you)",desc:"You (live participant)"}]];
+  $("seats").innerHTML = all.map(([n,p])=>`
+    <div class="seat" id="seat-${esc(n)}" style="color:${p.color}">
+      <div class="av" style="background:${p.color}">${esc(n[0]||"?")}</div>
+      <div style="color:var(--ink)"><div class="nm">${esc(n)}</div><div class="ds">${esc(p.desc)}</div></div>
+    </div>`).join("");
+}
+function renderChips(){
+  $("chips").innerHTML = TOPICS.map(([k,l])=>`<span class="chip ${covered.has(k)?"done":""}">${l}</span>`).join("");
+}
+function highlight(name){
+  document.querySelectorAll(".seat").forEach(s=>s.classList.remove("speaking"));
+  if(name){ const el = document.getElementById("seat-"+name); if(el) el.classList.add("speaking"); }
+}
+function setControls(){
+  const lock = busy || speaking || ended;
+  $("sendBtn").disabled = lock;
+  $("textIn").disabled = lock;
+  $("micBtn").disabled = (lock && !listening) || !recog;
+}
+
+/* =====================================================================
+   TALKING TO THE CLOUDFLARE WORKER
+   ===================================================================== */
+async function callClaude(system, msgs, maxTokens){
+  if(!WORKER_URL || WORKER_URL.includes("PASTE_YOUR")) throw new Error("WORKER_URL has not been set in index.html (see setup guide, Part 2).");
+  const res = await fetch(WORKER_URL, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "X-Access-Code": accessCode },
+    body: JSON.stringify({ accessCode, tier: MODEL_TIER, system, messages: msgs, max_tokens: maxTokens || 1200 })
+  });
+  let data, raw = await res.text();
+  try { data = JSON.parse(raw); } catch { data = { error: raw }; }
+  if(!res.ok || data.error){
+    const m = typeof data.error === "string" ? data.error : (data.error?.message || JSON.stringify(data.error || data));
+    throw new Error(`Worker said (${res.status}): ${m}`);
+  }
+  // Accept either the raw Anthropic response or a simplified {text:"..."} shape.
+  if(typeof data.text === "string") return data.text;
+  if(typeof data.reply === "string") return data.reply;
+  if(Array.isArray(data.content)) return data.content.filter(b=>b.type==="text").map(b=>b.text).join("");
+  throw new Error("Unexpected reply from Worker: " + raw.slice(0,200));
+}
+function parseJSON(text){
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  if(a<0 || b<a) throw new Error("No JSON in reply");
+  return JSON.parse(text.slice(a,b+1));
+}
+
+/* =====================================================================
+   DISCUSSION FLOW
+   ===================================================================== */
+async function peerTurn(userUtterance){
+  busy = true; setControls();
+  const think = addMsg("", "Your classmates are thinking…", "sys");
+  think.querySelector(".bubble").classList.add("thinking");
+  messages.push({ role:"user", content: userUtterance });
+  try{
+    let raw = await callClaude(buildSystemPrompt(userName), messages, 1200);
+    let parsed;
+    try { parsed = parseJSON(raw); }
+    catch { // one retry asking for valid JSON
+      raw = await callClaude(buildSystemPrompt(userName), [...messages, {role:"assistant",content:raw},{role:"user",content:"[System: please resend your last reply as valid JSON only, in the required format.]"}], 1200);
+      parsed = parseJSON(raw);
+    }
+    messages.push({ role:"assistant", content: JSON.stringify(parsed) });
+    think.remove();
+    (parsed.topics_covered||[]).forEach(t=>covered.add(t)); renderChips();
+    busy = false;
+    const turns = (parsed.turns||[]).filter(t=>PEERS[t.speaker] && t.text);
+    for(const t of turns){
+      if(ended) break;
+      addMsg(t.speaker, t.text);
+      transcriptLog.push({speaker:t.speaker, text:t.text});
+      await speak(t.speaker, t.text);
+    }
+    highlight(null);
+    setControls();
+    if(!ended){
+      setStatus(recog ? "Your turn — click the mic or type." : "Your turn — type your reply.");
+      if(recog && $("optHands").checked) startListening();
+    }
+  }catch(e){
+    think.remove();
+    messages.pop(); // let them retry the same point
+    busy = false; setControls();
+    addMsg("", "⚠ " + e.message + " — fix the problem and try again.", "sys");
+    setStatus("");
+    if(/WORKER_URL|Access|access code/i.test(e.message)) {/* surfaced above */}
+  }
+}
+
+function handleUserInput(text){
+  text = (text||"").trim();
+  if(!text || busy || ended) return;
+  $("textIn").value = ""; $("interim").textContent = "";
+  addMsg(userName, text, "you");
+  if(STOP_RE.test(text)){ endSession(); return; }
+  transcriptLog.push({speaker:userName, text});
+  peerTurn(`${userName}: ${text}`);
+}
+
+async function startSession(){
+  userName = $("nameIn").value.trim().replace(/[^\p{L}\p{M}' -]/gu,"").slice(0,30);
+  accessCode = $("codeIn").value.trim();
+  if(!userName){ $("startErr").textContent = "Please enter your first name."; return; }
+  if(PEERS[userName]){ $("startErr").textContent = `Please use a name other than ${userName} (that's a classmate's name).`; return; }
+  if(!accessCode){ $("startErr").textContent = "Please enter the access code."; return; }
+  $("startErr").textContent = "";
+  unlockSpeech();
+  $("startScreen").classList.add("hidden");
+  $("roomScreen").classList.remove("hidden");
+  renderSeats(); renderChips(); setControls();
+  addMsg("", `You've joined Priya, Marcus and Devon in a study room. Everyone has the same chart (click "View patient chart" any time). Say "stop" when you want to finish.`, "sys");
+  await peerTurn(`[The session is starting. ${userName} has just sat down with the group. Open the discussion naturally: one classmate briefly summarizes the case in 2–3 sentences, another reacts with first impressions about what's concerning, and end by inviting ${userName} to share their initial differential.]`);
+}
+
+/* =====================================================================
+   END OF SESSION + DEBRIEF
+   ===================================================================== */
+async function endSession(){
+  if(ended) return;
+  ended = true;
+  stopListening(); cancelSpeech(); speaking=false; highlight(null);
+  setControls();
+  const youSaid = transcriptLog.filter(t=>t.speaker===userName).length;
+  const bye = "Okay, let's wrap it there. Good discussion, everyone.";
+  addMsg("Priya", bye); speak("Priya", bye);
+  setStatus("Preparing your feedback…");
+  const transcriptText = transcriptLog.map(t=>`${t.speaker}: ${t.text}`).join("\n");
+  let fb = null, err = "";
+  if(youSaid === 0){
+    fb = {overall:`${userName} did not contribute before the session ended, so there is nothing to evaluate yet.`, scores:{preciseness:0,explanation:0,constructiveness:0}, strengths:[], improve:["Start a new session and share your differential early — even a tentative answer gives the group something to work with."], missed:[], teaching_points:[]};
+  } else {
+    try{
+      const raw = await callClaude(buildDebriefPrompt(userName), [{role:"user", content:"TRANSCRIPT:\n"+transcriptText}], 1500);
+      fb = parseJSON(raw);
+    }catch(e){ err = e.message; }
+  }
+  showDebrief(fb, err);
+}
+function list(arr){ return (arr&&arr.length) ? `<ul>${arr.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>` : `<p style="color:var(--muted)">—</p>`; }
+function showDebrief(fb, err){
+  $("roomScreen").classList.add("hidden");
+  $("debriefScreen").classList.remove("hidden");
+  const s = fb?.scores || {};
+  $("debrief").innerHTML = `
+    <h2>Session feedback for ${esc(userName)}</h2>
+    ${err ? `<p class="err">Couldn't generate feedback: ${esc(err)}. You can still download the transcript.</p>` : `<p>${esc(fb.overall||"")}</p>
+    <div class="scores">
+      <div class="score"><div class="n">${s.preciseness??"–"}/5</div><div class="l">Preciseness</div></div>
+      <div class="score"><div class="n">${s.explanation??"–"}/5</div><div class="l">Quality of explanation</div></div>
+      <div class="score"><div class="n">${s.constructiveness??"–"}/5</div><div class="l">Constructiveness</div></div>
+    </div>
+    <h3>What you did well</h3>${list(fb.strengths)}
+    <h3>How to improve</h3>${list(fb.improve)}
+    <h3>Points not covered</h3>${list(fb.missed)}
+    <h3>Key teaching points</h3>${list(fb.teaching_points)}`}
+    <div class="row" style="margin-top:22px">
+      <button class="btn primary" id="dlBtn">Download transcript</button>
+      <button class="btn ghost" onclick="location.reload()">Start a new session</button>
+    </div>`;
+  $("dlBtn").onclick = ()=>{
+    const head = `Peer Case Rounds — transcript\nParticipant: ${userName}\nDate: ${new Date().toLocaleString()}\n\n`;
+    const body = transcriptLog.map(t=>`${t.speaker}: ${t.text}`).join("\n\n");
+    const extra = fb && !err ? `\n\n--- FEEDBACK ---\n${fb.overall}\nPreciseness ${s.preciseness}/5 · Explanation ${s.explanation}/5 · Constructiveness ${s.constructiveness}/5\n\nStrengths:\n- ${(fb.strengths||[]).join("\n- ")}\n\nHow to improve:\n- ${(fb.improve||[]).join("\n- ")}\n\nNot covered:\n- ${(fb.missed||[]).join("\n- ")}\n\nTeaching points:\n- ${(fb.teaching_points||[]).join("\n- ")}\n` : "";
+    const blob = new Blob([head+body+extra], {type:"text/plain"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `peer-rounds-${userName}-${new Date().toISOString().slice(0,10)}.txt`; a.click();
+  };
+  setStatus("");
+}
+
+/* =====================================================================
+   AUDIO OUT — text-to-speech (built into the browser, free)
+   ===================================================================== */
+let voices = [], voiceFor = {}, speechGen = 0;
+function cancelSpeech(){ speechGen++; if("speechSynthesis" in window) speechSynthesis.cancel(); }
+function loadVoices(){
+  if(!("speechSynthesis" in window)) return;
+  voices = speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  if(!voices.length) return;
+  const used = new Set();
+  for(const [name,p] of Object.entries(PEERS)){
+    let pick = null;
+    for(const hint of p.voiceHint){
+      pick = voices.find(v=>!used.has(v.name) && v.name.toLowerCase().includes(hint));
+      if(pick) break;
+    }
+    if(!pick) pick = voices.find(v=>!used.has(v.name)) || voices[0];
+    used.add(pick.name); voiceFor[name] = pick;
+  }
+}
+if("speechSynthesis" in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function unlockSpeech(){ // browsers need a click before audio is allowed
+  if(!("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u);
+}
+function speak(name, text){
+  return new Promise(resolve=>{
+    if(!$("optVoice").checked || !("speechSynthesis" in window) || ended && name!=="Priya"){ resolve(); return; }
+    speaking = true; setControls(); highlight(name);
+    // Chrome cuts off long utterances, so speak sentence by sentence.
+    const parts = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+    let i = 0; const gen = speechGen;
+    const next = ()=>{
+      if(i >= parts.length || gen !== speechGen){ speaking=false; setControls(); resolve(); return; }
+      const u = new SpeechSynthesisUtterance(parts[i++].trim());
+      if(voiceFor[name]) u.voice = voiceFor[name];
+      u.pitch = PEERS[name]?.pitch || 1;
+      u.rate = parseFloat($("optRate").value) || 1;
+      u.onend = next; u.onerror = next;
+      speechSynthesis.speak(u);
+    };
+    // safety net in case the browser never fires onend
+    const guard = setTimeout(()=>{ if(speaking){ speechSynthesis.cancel(); speaking=false; setControls(); resolve(); } }, 8000 + text.length*120);
+    const origResolve = resolve; resolve = (...a)=>{ clearTimeout(guard); origResolve(...a); };
+    next();
+  });
+}
+
+/* =====================================================================
+   AUDIO IN — speech recognition (Chrome / Edge / Safari)
+   ===================================================================== */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if(SR){
+  recog = new SR();
+  recog.lang = "en-US"; recog.interimResults = true; recog.continuous = false;
+  recog.onresult = e=>{
+    let finalT = "", interimT = "";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r = e.results[i];
+      if(r.isFinal) finalT += r[0].transcript; else interimT += r[0].transcript;
+    }
+    if(finalT) heardText += finalT + " ";
+    $("interim").textContent = (heardText + interimT).trim() ? "Hearing: " + (heardText + interimT).trim() : "";
+  };
+  recog.onend = ()=>{
+    listening = false; $("micBtn").classList.remove("listening"); setControls();
+    const t = heardText.trim(); heardText = "";
+    if(!t){ $("interim").textContent = ""; if(!ended && !busy) setStatus("Didn't catch that — click the mic to try again, or type."); return; }
+    if($("optAutoSend").checked || STOP_RE.test(t)) handleUserInput(t);
+    else { $("textIn").value = t; $("interim").textContent = ""; setStatus("Check the text, then press Send."); }
+  };
+  recog.onerror = e=>{
+    if(e.error === "not-allowed" || e.error === "service-not-allowed")
+      addMsg("", "⚠ Microphone permission was blocked. Click the padlock/site icon in the address bar, allow the microphone, then reload. You can keep going by typing.", "sys");
+    else if(e.error !== "no-speech" && e.error !== "aborted")
+      setStatus("Mic problem: " + e.error + ". You can type instead.");
+  };
+}else{
+  document.addEventListener("DOMContentLoaded",()=>{});
+}
+function startListening(){
+  if(!recog || listening || busy || speaking || ended) return;
+  heardText = "";
+  try{ recog.start(); listening = true; $("micBtn").classList.add("listening"); setStatus("Listening… speak now (pause to finish)."); setControls(); }
+  catch(_){}
+}
+function stopListening(){ if(recog && listening){ try{ recog.stop(); }catch(_){} } }
+
+/* =====================================================================
+   BUTTON WIRING
+   ===================================================================== */
+$("startBtn").onclick = startSession;
+$("nameIn").addEventListener("keydown",e=>{ if(e.key==="Enter") $("codeIn").focus(); });
+$("codeIn").addEventListener("keydown",e=>{ if(e.key==="Enter") startSession(); });
+$("testVoiceBtn").onclick = ()=>{ unlockSpeech(); loadVoices(); speak("Priya","Hi, I'm Priya. If you can hear me, your speakers work.").then(()=>speak("Marcus","And I'm Marcus.")).then(()=>speak("Devon","I'm Devon. See you in rounds.")).then(()=>highlight(null)); };
+$("micBtn").onclick = ()=>{ if(listening) stopListening(); else { cancelSpeech(); startListening(); } };
+$("sendBtn").onclick = ()=>handleUserInput($("textIn").value);
+$("textIn").addEventListener("keydown",e=>{ if(e.key==="Enter") handleUserInput($("textIn").value); });
+$("stopBtn").onclick = endSession;
+$("chartBtn").onclick = ()=>{ $("chartBody").textContent = CASE_TEXT; $("chartDlg").showModal(); };
+$("closeChart").onclick = ()=>$("chartDlg").close();
+$("optVoice").onchange = ()=>{ if(!$("optVoice").checked) cancelSpeech(); };
+
+if(!SR){
+  $("browserNote").innerHTML = "⚠ This browser can't listen to your voice. You'll hear your classmates, but you'll need to <b>type</b> your replies. For voice input, use <b>Google Chrome</b> or <b>Microsoft Edge</b>.";
+}
+</script>
+</body>
+</html>
